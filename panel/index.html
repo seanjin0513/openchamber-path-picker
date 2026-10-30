@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>路径面板</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="head">
+        <div class="heading">
+          <h1>路径面板</h1>
+          <p id="root-label" class="root-label">正在连接…</p>
+        </div>
+        <button id="refresh" class="icon-button" type="button" title="刷新" aria-label="刷新">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 11a8 8 0 1 0-2.3 6.3" />
+            <path d="M20 5v6h-6" />
+          </svg>
+        </button>
+      </header>
+
+      <div class="toolbar">
+        <div class="mode" role="group" aria-label="插入路径格式">
+          <button id="mode-relative" type="button" aria-pressed="true" title="插入相对于当前工作区的路径">相对路径</button>
+          <button id="mode-absolute" type="button" aria-pressed="false" title="插入完整绝对路径">绝对路径</button>
+        </div>
+
+        <button id="collapse" class="icon-button" type="button" title="全部收起" aria-label="全部收起">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 6h16" />
+            <path d="m8 11 4-4 4 4" />
+            <path d="m8 17 4 4 4-4" />
+          </svg>
+        </button>
+
+        <button id="hidden" class="icon-button" type="button" aria-pressed="false" title="显示点文件和 node_modules" aria-label="显示点文件和 node_modules">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z" />
+            <circle cx="12" cy="12" r="2.6" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="6.5" />
+          <path d="m16 16 4.5 4.5" />
+        </svg>
+        <input id="search" type="search" placeholder="筛选文件…" autocomplete="off" spellcheck="false" aria-label="筛选文件" title="筛选已加载的文件树；展开文件夹可搜索其中内容" />
+        <button id="clear" class="clear" type="button" title="清除筛选" aria-label="清除筛选" hidden>×</button>
+      </div>
+
+      <div id="list" class="list" role="tree" aria-label="文件树" tabindex="-1"></div>
+
+      <footer class="foot">
+        <span id="count" class="count"></span>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </footer>
+
+      <div id="menu" class="menu" role="menu" aria-label="文件操作" hidden>
+        <p id="menu-name" class="menu-name"></p>
+        <button id="menu-open" class="menu-item" type="button" role="menuitem">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 4h6v6" />
+            <path d="M20 4 11 13" />
+            <path d="M19 14.5V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V7a1.5 1.5 0 0 1 1.5-1.5H10" />
+          </svg>
+          <span>用默认应用打开</span>
+        </button>
+      </div>
+    </div>
+    <script src="main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+{
+  "name": "openchamber-path-picker",
+  "version": "0.2.0",
+  "private": true,
+  "description": "OpenChamber 扩展：浏览当前工作区文件，把文件路径插入输入框",
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@openchamber/sdk": "^2.5.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  },
+  "openchamber": {
+    "apiVersion": 1,
+    "engines": {
+      "openchamber": ">=2.5.0"
+    },
+    "contributes": {
+      "panel": {
+        "id": "path-picker",
+        "name": "路径面板",
+        "icon": "icon.svg",
+        "entry": "panel/index.html"
+      },
+      "service": {
+        "entry": "service/main.js",
+        "runtime": "host",
+        "permissions": {
+          "exec": [
+            "open",
+            "explorer.exe",
+            "xdg-open"
+          ]
+        }
+      },
+      "attach": false,
+      "capabilities": [
+        "files"
+      ]
+    }
+  }
+}
