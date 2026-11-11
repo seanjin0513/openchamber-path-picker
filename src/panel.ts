@@ -46,6 +46,7 @@ const els = {
   status: el<HTMLElement>('#status'),
   menu: el<HTMLElement>('#menu'),
   menuName: el<HTMLElement>('#menu-name'),
+  menuInsert: el<HTMLButtonElement>('#menu-insert'),
   menuOpen: el<HTMLButtonElement>('#menu-open'),
 };
 
@@ -64,7 +65,7 @@ const state = {
 
 let statusTimer = 0;
 let visibleCount = 0;
-let menuTarget: { path: string; row: HTMLButtonElement } | null = null;
+let menuTarget: { path: string; kind: FileListEntry['kind']; row: HTMLButtonElement } | null = null;
 
 const collator = new Intl.Collator(undefined, {
   numeric: true,
@@ -336,15 +337,13 @@ function renderRow(entry: FileListEntry, path: string): HTMLButtonElement {
     void insertEntry(path, row);
   });
 
-  if (!isDirectory(entry)) {
-    row.setAttribute('aria-haspopup', 'menu');
-    row.addEventListener('contextmenu', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      row.focus({ preventScroll: true });
-      openMenu(path, row, event.clientX, event.clientY);
-    });
-  }
+  row.setAttribute('aria-haspopup', 'menu');
+  row.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    row.focus({ preventScroll: true });
+    openMenu(path, entry.kind, row, event.clientX, event.clientY);
+  });
 
   return row;
 }
@@ -407,10 +406,13 @@ async function insertEntry(path: string, row: HTMLElement): Promise<void> {
   }
 }
 
-function openMenu(path: string, row: HTMLButtonElement, x: number, y: number): void {
-  menuTarget = { path, row };
+function openMenu(path: string, kind: FileListEntry['kind'], row: HTMLButtonElement, x: number, y: number): void {
+  menuTarget = { path, kind, row };
   els.menuName.textContent = baseName(path);
   els.menuName.title = absolutePath(path);
+  // Folders can only be inserted; files keep the open-with-item.
+  els.menuInsert.hidden = kind !== 'directory';
+  els.menuOpen.hidden = kind === 'directory';
   els.menu.hidden = false;
 
   // Measure at the origin before clamping so the menu never opens off-screen.
@@ -423,7 +425,8 @@ function openMenu(path: string, row: HTMLButtonElement, x: number, y: number): v
   els.menu.style.left = `${left}px`;
   els.menu.style.top = `${top}px`;
 
-  els.menuOpen.focus({ preventScroll: true });
+  const first = [els.menuInsert, els.menuOpen].find((item) => !item.hidden);
+  first?.focus({ preventScroll: true });
 }
 
 function closeMenu(restoreFocus = false): void {
@@ -842,6 +845,12 @@ els.search.addEventListener('keydown', (event) => {
 });
 
 els.clear.addEventListener('click', () => clearQuery());
+
+els.menuInsert.addEventListener('click', () => {
+  const target = menuTarget;
+  closeMenu();
+  if (target) void insertEntry(target.path, target.row);
+});
 
 els.menuOpen.addEventListener('click', () => {
   const target = menuTarget;

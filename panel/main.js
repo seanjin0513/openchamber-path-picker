@@ -1785,6 +1785,7 @@ ${GUEST_UI_LOOK_CSS}`;
     status: el2("#status"),
     menu: el2("#menu"),
     menuName: el2("#menu-name"),
+    menuInsert: el2("#menu-insert"),
     menuOpen: el2("#menu-open")
   };
   var state = {
@@ -2015,15 +2016,13 @@ ${GUEST_UI_LOOK_CSS}`;
       }
       void insertEntry(path, row);
     });
-    if (!isDirectory(entry)) {
-      row.setAttribute("aria-haspopup", "menu");
-      row.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        row.focus({ preventScroll: true });
-        openMenu(path, row, event.clientX, event.clientY);
-      });
-    }
+    row.setAttribute("aria-haspopup", "menu");
+    row.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      row.focus({ preventScroll: true });
+      openMenu(path, entry.kind, row, event.clientX, event.clientY);
+    });
     return row;
   }
   function note(text) {
@@ -2071,10 +2070,12 @@ ${GUEST_UI_LOOK_CSS}`;
       void host.toast({ kind: "error", message }).catch(() => void 0);
     }
   }
-  function openMenu(path, row, x, y) {
-    menuTarget = { path, row };
+  function openMenu(path, kind, row, x, y) {
+    menuTarget = { path, kind, row };
     els.menuName.textContent = baseName(path);
     els.menuName.title = absolutePath(path);
+    els.menuInsert.hidden = kind !== "directory";
+    els.menuOpen.hidden = kind === "directory";
     els.menu.hidden = false;
     els.menu.style.left = "0px";
     els.menu.style.top = "0px";
@@ -2084,7 +2085,8 @@ ${GUEST_UI_LOOK_CSS}`;
     const top = Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin));
     els.menu.style.left = `${left}px`;
     els.menu.style.top = `${top}px`;
-    els.menuOpen.focus({ preventScroll: true });
+    const first = [els.menuInsert, els.menuOpen].find((item) => !item.hidden);
+    first?.focus({ preventScroll: true });
   }
   function closeMenu(restoreFocus = false) {
     if (els.menu.hidden) return;
@@ -2439,6 +2441,11 @@ ${GUEST_UI_LOOK_CSS}`;
     }
   });
   els.clear.addEventListener("click", () => clearQuery());
+  els.menuInsert.addEventListener("click", () => {
+    const target = menuTarget;
+    closeMenu();
+    if (target) void insertEntry(target.path, target.row);
+  });
   els.menuOpen.addEventListener("click", () => {
     const target = menuTarget;
     closeMenu();
