@@ -1932,12 +1932,14 @@ ${GUEST_UI_LOOK_CSS}`;
       const path = joinPath(parentPathValue, entry.name);
       const node = document.createElement("div");
       node.className = "tree-node";
-      node.setAttribute("role", "none");
-      const row = renderRow(entry, path, depth);
+      node.setAttribute("role", "treeitem");
+      node.setAttribute("aria-level", String(depth + 1));
+      const row = renderRow(entry, path);
       node.append(row);
       if (isDirectory(entry)) {
         const expanded = query ? state.expanded.has(path) || hasVisibleChild(path, query) : state.expanded.has(path);
         row.setAttribute("aria-expanded", String(expanded));
+        node.setAttribute("aria-expanded", String(expanded));
         row.classList.toggle("expanded", expanded);
         if (state.loading.has(path)) row.classList.add("is-loading");
         if (expanded) {
@@ -1979,15 +1981,13 @@ ${GUEST_UI_LOOK_CSS}`;
     group.append(loadingNote());
     void loadDir(path);
   }
-  function renderRow(entry, path, depth) {
+  function renderRow(entry, path) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "row tree-row";
     row.dataset.path = path;
     row.dataset.kind = entry.kind;
     row.title = path;
-    row.setAttribute("role", "treeitem");
-    row.setAttribute("aria-level", String(depth + 1));
     const lead = document.createElement("span");
     lead.className = "row-lead";
     if (isDirectory(entry)) {
@@ -2363,7 +2363,10 @@ ${GUEST_UI_LOOK_CSS}`;
     void host.storage.set("show-hidden", value).catch(() => void 0);
   }
   function treeRows() {
-    return Array.from(els.list.querySelectorAll('[role="treeitem"]'));
+    return Array.from(els.list.querySelectorAll(".tree-row"));
+  }
+  function treeItemForRow(row) {
+    return row?.closest('[role="treeitem"]') ?? void 0;
   }
   function activeTreePath() {
     const active2 = document.activeElement;
@@ -2493,14 +2496,14 @@ ${GUEST_UI_LOOK_CSS}`;
       case "ArrowRight":
         if (!row || row.dataset.kind !== "directory") return;
         event.preventDefault();
-        if (row.getAttribute("aria-expanded") === "true") focusRow(index + 1);
+        if (treeItemForRow(row)?.getAttribute("aria-expanded") === "true") focusRow(index + 1);
         else toggleDir(row.dataset.path ?? "");
         break;
       case "ArrowLeft": {
         if (!row) return;
         event.preventDefault();
         const path = row.dataset.path ?? "";
-        if (row.dataset.kind === "directory" && row.getAttribute("aria-expanded") === "true") {
+        if (row.dataset.kind === "directory" && treeItemForRow(row)?.getAttribute("aria-expanded") === "true") {
           toggleDir(path);
           return;
         }

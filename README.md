@@ -27,11 +27,7 @@ OpenChamber 扩展：以树形浏览当前工作区的文件，点一下就把�
 
 ## 安装
 
-在 OpenChamber 的 `设置 → 扩展` 里选择「从文件夹安装」，指向本目录：
-
-```
-/Users/sean/Projects/openchamber-path-picker
-```
+在 OpenChamber 的 `设置 → 扩展` 里选择「从文件夹安装」，指向本项目目录（即包含 `package.json`、`panel/` 和 `service/` 的目录）。
 
 也可以在 `~/.config/openchamber/extensions.json` 的 `paths` 数组中加入该路径，然后重启 OpenChamber。
 
