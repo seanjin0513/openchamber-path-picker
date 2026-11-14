@@ -2,6 +2,7 @@
 
 const http = require('node:http');
 const fs = require('node:fs/promises');
+const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 
@@ -93,6 +94,84 @@ function launch(command, args) {
   });
 }
 
+async function deleteEntry(target, root) {
+  if (typeof target !== 'string' || target.length === 0) {
+    throw new ServiceError(400, '缺少路径。');
+  }
+  if (typeof root !== 'string' || !path.isAbsolute(root)) {
+    throw new ServiceError(400, '缺少项目目录。');
+  }
+  if (target.includes('\0')) {
+    throw new ServiceError(400, '路径无效。');
+  }
+  if (!path.isAbsolute(target)) {
+    throw new ServiceError(400, '需要绝对路径。');
+  }
+
+  const resolvedTarget = path.resolve(target);
+  const resolvedRoot = path.resolve(root);
+  const relative = path.relative(resolvedRoot, resolvedTarget);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new ServiceError(400, '只能删除项目目录内的文件。');
+  }
+
+  let stat;
+  try {
+    stat = await fs.lstat(resolvedTarget);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new ServiceError(404, '文件不存在或已被移动。');
+    }
+    throw new ServiceError(500, '无法读取这个文件。');
+  }
+
+  // macOS moves it into the user's Trash; other platforms remove it outright.
+  if (process.platform === 'darwin') {
+    await moveToTrash(resolvedTarget);
+    return true;
+  }
+
+  try {
+    await fs.rm(resolvedTarget, { recursive: stat.isDirectory(), force: false });
+  } catch (error) {
+    throw new ServiceError(500, '删除失败，文件可能正在被使用。');
+  }
+  return false;
+}
+
+async function moveToTrash(target) {
+  const name = path.basename(target);
+  if (!name || name === path.sep) throw new ServiceError(400, '只能删除项目目录内的文件。');
+
+  const trash = path.join(os.homedir(), '.Trash');
+  let destination = '';
+  for (let index = 0; index < 100; index += 1) {
+    const candidate = path.join(trash, index === 0 ? name : `${name} ${index + 1}`);
+    try {
+      await fs.lstat(candidate);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        destination = candidate;
+        break;
+      }
+      throw new ServiceError(500, '无法访问废纸篓。');
+    }
+  }
+  if (!destination) throw new ServiceError(409, '废纸篓里同名项目太多，请手动删除。');
+
+  try {
+    await fs.rename(target, destination);
+  } catch (error) {
+    if (error && error.code === 'EXDEV') {
+      throw new ServiceError(409, '项目和废纸篓不在同一磁盘，请手动删除。');
+    }
+    if (error && error.code === 'ENOENT') {
+      throw new ServiceError(404, '文件不存在或已被移动。');
+    }
+    throw new ServiceError(500, '无法移入废纸篓。');
+  }
+}
+
 async function openFile(target) {
   if (typeof target !== 'string' || target.length === 0) {
     throw new ServiceError(400, '缺少文件路径。');
@@ -156,6 +235,20 @@ const server = http.createServer(async (request, response) => {
 
       await openFile(payload && payload.path);
       send(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/delete') {
+      let payload;
+      try {
+        payload = JSON.parse(await readBody(request));
+      } catch (error) {
+        if (error instanceof ServiceError) throw error;
+        throw new ServiceError(400, '请求内容不是有效的 JSON。');
+      }
+
+      const trashed = await deleteEntry(payload && payload.path, payload && payload.root);
+      send(response, 200, { ok: true, trashed });
       return;
     }
 

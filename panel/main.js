@@ -1786,7 +1786,9 @@ ${GUEST_UI_LOOK_CSS}`;
     menu: el2("#menu"),
     menuName: el2("#menu-name"),
     menuInsert: el2("#menu-insert"),
-    menuOpen: el2("#menu-open")
+    menuOpen: el2("#menu-open"),
+    menuDelete: el2("#menu-delete"),
+    menuDeleteLabel: el2("#menu-delete-label")
   };
   var state = {
     ready: false,
@@ -1803,6 +1805,7 @@ ${GUEST_UI_LOOK_CSS}`;
   var statusTimer = 0;
   var visibleCount = 0;
   var menuTarget = null;
+  var deleteArmed = false;
   var collator = new Intl.Collator(void 0, {
     numeric: true,
     sensitivity: "base"
@@ -2076,6 +2079,7 @@ ${GUEST_UI_LOOK_CSS}`;
     els.menuName.title = absolutePath(path);
     els.menuInsert.hidden = kind !== "directory";
     els.menuOpen.hidden = kind === "directory";
+    armDelete(false);
     els.menu.hidden = false;
     els.menu.style.left = "0px";
     els.menu.style.top = "0px";
@@ -2085,13 +2089,19 @@ ${GUEST_UI_LOOK_CSS}`;
     const top = Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin));
     els.menu.style.left = `${left}px`;
     els.menu.style.top = `${top}px`;
-    const first = [els.menuInsert, els.menuOpen].find((item) => !item.hidden);
+    const first = [els.menuInsert, els.menuOpen, els.menuDelete].find((item) => !item.hidden);
     first?.focus({ preventScroll: true });
+  }
+  function armDelete(armed) {
+    deleteArmed = armed;
+    els.menuDeleteLabel.textContent = armed ? "\u786E\u8BA4\u5220\u9664\uFF1F" : "\u5220\u9664";
+    els.menuDelete.setAttribute("aria-label", armed ? "\u786E\u8BA4\u5220\u9664\uFF0C\u4E0D\u53EF\u64A4\u9500" : "\u5220\u9664");
   }
   function closeMenu(restoreFocus = false) {
     if (els.menu.hidden) return;
     const target = menuTarget;
     menuTarget = null;
+    armDelete(false);
     els.menu.hidden = true;
     if (restoreFocus) target?.row.focus({ preventScroll: true });
   }
@@ -2106,24 +2116,24 @@ ${GUEST_UI_LOOK_CSS}`;
     }
     return null;
   }
-  function describeOpenError(error) {
+  function describeServiceError(error, fallback) {
     if (error instanceof HostRequestError) {
       switch (error.code) {
         case "NO_SERVICE":
-          return "\u672C\u5730\u6253\u5F00\u670D\u52A1\u672A\u5C31\u7EEA\u3002\u8BF7\u786E\u8BA4\u5DF2\u5728 \u8BBE\u7F6E \u2192 \u6269\u5C55 \u2192 \u8DEF\u5F84\u9762\u677F \u5141\u8BB8\u201C\u672C\u5730\u670D\u52A1\u201D\uFF0C\u7136\u540E\u91CD\u8BD5\u3002";
+          return "\u672C\u5730\u670D\u52A1\u672A\u5C31\u7EEA\u3002\u8BF7\u786E\u8BA4\u5DF2\u5728 \u8BBE\u7F6E \u2192 \u6269\u5C55 \u2192 \u8DEF\u5F84\u9762\u677F \u5141\u8BB8\u201C\u672C\u5730\u670D\u52A1\u201D\uFF0C\u7136\u540E\u91CD\u8BD5\u3002";
         case "DISABLED":
           return "\u6269\u5C55\u5DF2\u88AB\u505C\u7528\uFF0C\u8BF7\u5728 \u8BBE\u7F6E \u2192 \u6269\u5C55 \u4E2D\u91CD\u65B0\u542F\u7528\u8DEF\u5F84\u9762\u677F\u3002";
         case "SERVICE_FAILED":
-          return "\u672C\u5730\u6253\u5F00\u670D\u52A1\u542F\u52A8\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5\uFF1B\u82E5\u53CD\u590D\u5931\u8D25\uFF0C\u91CD\u65B0\u52A0\u8F7D\u754C\u9762\u3002";
+          return "\u672C\u5730\u670D\u52A1\u542F\u52A8\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5\uFF1B\u82E5\u53CD\u590D\u5931\u8D25\uFF0C\u91CD\u65B0\u52A0\u8F7D\u754C\u9762\u3002";
         case "REQUEST_FAILED":
-          return "\u672C\u5730\u6253\u5F00\u670D\u52A1\u6CA1\u6709\u54CD\u5E94\uFF0C\u8BF7\u91CD\u8BD5\u3002";
+          return "\u672C\u5730\u670D\u52A1\u6CA1\u6709\u54CD\u5E94\uFF0C\u8BF7\u91CD\u8BD5\u3002";
         case "NOT_GRANTED":
           return "\u9700\u8981\u672C\u5730\u670D\u52A1\u6743\u9650\u3002\u8BF7\u5230 \u8BBE\u7F6E \u2192 \u6269\u5C55 \u2192 \u8DEF\u5F84\u9762\u677F \u5141\u8BB8\u201C\u672C\u5730\u670D\u52A1\u201D\u3002";
         default:
           return error.message;
       }
     }
-    return error instanceof Error ? error.message : "\u65E0\u6CD5\u7528\u9ED8\u8BA4\u5E94\u7528\u6253\u5F00\u3002";
+    return error instanceof Error ? error.message : fallback;
   }
   async function openPathWithDefaultApp(path) {
     if (!state.directory) return;
@@ -2138,9 +2148,37 @@ ${GUEST_UI_LOOK_CSS}`;
       }
       showStatus(`\u5DF2\u7528\u9ED8\u8BA4\u5E94\u7528\u6253\u5F00 ${baseName(path)}`, "success");
     } catch (error) {
-      const message = describeOpenError(error);
+      const message = describeServiceError(error, "\u65E0\u6CD5\u7528\u9ED8\u8BA4\u5E94\u7528\u6253\u5F00\u3002");
       showStatus(message, "error");
       void host.toast({ kind: "error", message }).catch(() => void 0);
+    }
+  }
+  async function deleteEntry(path, row) {
+    const root = state.directory;
+    if (!root) return;
+    try {
+      const result = await host.serviceRequest({
+        method: "POST",
+        path: "/delete",
+        body: JSON.stringify({ path: absolutePath(path), root })
+      });
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error(serviceErrorText(result.body) ?? `\u672C\u5730\u670D\u52A1\u8FD4\u56DE ${result.status}\u3002`);
+      }
+      const trashed = JSON.parse(result.body || "{}").trashed !== false;
+      const parent = parentPath(path);
+      state.children.delete(path);
+      state.expanded.delete(path);
+      state.errors.delete(path);
+      showStatus(`${trashed ? "\u5DF2\u79FB\u5230\u5E9F\u7EB8\u7BD3" : "\u5DF2\u5220\u9664"} ${path}`, "success");
+      await loadDir(parent);
+      if (parent) focusRowByPath(parent);
+      else els.list.focus({ preventScroll: true });
+    } catch (error) {
+      const message = describeServiceError(error, `\u65E0\u6CD5\u5220\u9664 ${baseName(path)}\u3002`);
+      showStatus(message, "error");
+      void host.toast({ kind: "error", message }).catch(() => void 0);
+      row.focus({ preventScroll: true });
     }
   }
   function flashRow(row) {
@@ -2451,6 +2489,16 @@ ${GUEST_UI_LOOK_CSS}`;
     closeMenu();
     if (target) void openPathWithDefaultApp(target.path);
   });
+  els.menuDelete.addEventListener("click", () => {
+    const target = menuTarget;
+    if (!target) return;
+    if (!deleteArmed) {
+      armDelete(true);
+      return;
+    }
+    closeMenu();
+    void deleteEntry(target.path, target.row);
+  });
   els.menu.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -2458,6 +2506,14 @@ ${GUEST_UI_LOOK_CSS}`;
       return;
     }
     if (event.key === "Tab") closeMenu();
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const items = [els.menuInsert, els.menuOpen, els.menuDelete].filter((item) => !item.hidden);
+    if (items.length === 0) return;
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    const index = items.indexOf(document.activeElement);
+    const next = index === -1 ? 0 : (index + step + items.length) % items.length;
+    items[next]?.focus({ preventScroll: true });
   });
   document.addEventListener(
     "pointerdown",

@@ -569,6 +569,19 @@ button:disabled {
   color: var(--oc-muted);
 }
 
+.menu-item.danger {
+  color: var(--oc-error-text, var(--oc-error, #d1242f));
+}
+
+.menu-item.danger svg {
+  color: inherit;
+}
+
+.menu-item.danger:hover,
+.menu-item.danger:focus-visible {
+  background: color-mix(in srgb, var(--oc-error, #d1242f) 14%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .row.inserted,
   .skeleton,

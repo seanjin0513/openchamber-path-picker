@@ -48,6 +48,8 @@ const els = {
   menuName: el<HTMLElement>('#menu-name'),
   menuInsert: el<HTMLButtonElement>('#menu-insert'),
   menuOpen: el<HTMLButtonElement>('#menu-open'),
+  menuDelete: el<HTMLButtonElement>('#menu-delete'),
+  menuDeleteLabel: el<HTMLElement>('#menu-delete-label'),
 };
 
 const state = {
@@ -66,6 +68,7 @@ const state = {
 let statusTimer = 0;
 let visibleCount = 0;
 let menuTarget: { path: string; kind: FileListEntry['kind']; row: HTMLButtonElement } | null = null;
+let deleteArmed = false;
 
 const collator = new Intl.Collator(undefined, {
   numeric: true,
@@ -410,9 +413,10 @@ function openMenu(path: string, kind: FileListEntry['kind'], row: HTMLButtonElem
   menuTarget = { path, kind, row };
   els.menuName.textContent = baseName(path);
   els.menuName.title = absolutePath(path);
-  // Folders can only be inserted; files keep the open-with-item.
+  // Folders can only be inserted; files keep the open-with-item. Both can be deleted.
   els.menuInsert.hidden = kind !== 'directory';
   els.menuOpen.hidden = kind === 'directory';
+  armDelete(false);
   els.menu.hidden = false;
 
   // Measure at the origin before clamping so the menu never opens off-screen.
@@ -425,14 +429,22 @@ function openMenu(path: string, kind: FileListEntry['kind'], row: HTMLButtonElem
   els.menu.style.left = `${left}px`;
   els.menu.style.top = `${top}px`;
 
-  const first = [els.menuInsert, els.menuOpen].find((item) => !item.hidden);
+  const first = [els.menuInsert, els.menuOpen, els.menuDelete].find((item) => !item.hidden);
   first?.focus({ preventScroll: true });
+}
+
+/** A second click on the same menu is what actually deletes. */
+function armDelete(armed: boolean): void {
+  deleteArmed = armed;
+  els.menuDeleteLabel.textContent = armed ? '确认删除？' : '删除';
+  els.menuDelete.setAttribute('aria-label', armed ? '确认删除，不可撤销' : '删除');
 }
 
 function closeMenu(restoreFocus = false): void {
   if (els.menu.hidden) return;
   const target = menuTarget;
   menuTarget = null;
+  armDelete(false);
   els.menu.hidden = true;
   if (restoreFocus) target?.row.focus({ preventScroll: true });
 }
@@ -450,24 +462,24 @@ function serviceErrorText(body: string): string | null {
   return null;
 }
 
-function describeOpenError(error: unknown): string {
+function describeServiceError(error: unknown, fallback: string): string {
   if (error instanceof HostRequestError) {
     switch (error.code) {
       case 'NO_SERVICE':
-        return '本地打开服务未就绪。请确认已在 设置 → 扩展 → 路径面板 允许“本地服务”，然后重试。';
+        return '本地服务未就绪。请确认已在 设置 → 扩展 → 路径面板 允许“本地服务”，然后重试。';
       case 'DISABLED':
         return '扩展已被停用，请在 设置 → 扩展 中重新启用路径面板。';
       case 'SERVICE_FAILED':
-        return '本地打开服务启动失败，请重试；若反复失败，重新加载界面。';
+        return '本地服务启动失败，请重试；若反复失败，重新加载界面。';
       case 'REQUEST_FAILED':
-        return '本地打开服务没有响应，请重试。';
+        return '本地服务没有响应，请重试。';
       case 'NOT_GRANTED':
         return '需要本地服务权限。请到 设置 → 扩展 → 路径面板 允许“本地服务”。';
       default:
         return error.message;
     }
   }
-  return error instanceof Error ? error.message : '无法用默认应用打开。';
+  return error instanceof Error ? error.message : fallback;
 }
 
 async function openPathWithDefaultApp(path: string): Promise<void> {
@@ -486,9 +498,42 @@ async function openPathWithDefaultApp(path: string): Promise<void> {
 
     showStatus(`已用默认应用打开 ${baseName(path)}`, 'success');
   } catch (error) {
-    const message = describeOpenError(error);
+    const message = describeServiceError(error, '无法用默认应用打开。');
     showStatus(message, 'error');
     void host.toast({ kind: 'error', message }).catch(() => undefined);
+  }
+}
+
+async function deleteEntry(path: string, row: HTMLButtonElement): Promise<void> {
+  const root = state.directory;
+  if (!root) return;
+
+  try {
+    const result = await host.serviceRequest({
+      method: 'POST',
+      path: '/delete',
+      body: JSON.stringify({ path: absolutePath(path), root }),
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(serviceErrorText(result.body) ?? `本地服务返回 ${result.status}。`);
+    }
+
+    const trashed = (JSON.parse(result.body || '{}') as { trashed?: boolean }).trashed !== false;
+    const parent = parentPath(path);
+    state.children.delete(path);
+    state.expanded.delete(path);
+    state.errors.delete(path);
+
+    showStatus(`${trashed ? '已移到废纸篓' : '已删除'} ${path}`, 'success');
+    await loadDir(parent);
+    if (parent) focusRowByPath(parent);
+    else els.list.focus({ preventScroll: true });
+  } catch (error) {
+    const message = describeServiceError(error, `无法删除 ${baseName(path)}。`);
+    showStatus(message, 'error');
+    void host.toast({ kind: 'error', message }).catch(() => undefined);
+    row.focus({ preventScroll: true });
   }
 }
 
@@ -858,6 +903,17 @@ els.menuOpen.addEventListener('click', () => {
   if (target) void openPathWithDefaultApp(target.path);
 });
 
+els.menuDelete.addEventListener('click', () => {
+  const target = menuTarget;
+  if (!target) return;
+  if (!deleteArmed) {
+    armDelete(true);
+    return;
+  }
+  closeMenu();
+  void deleteEntry(target.path, target.row);
+});
+
 els.menu.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     event.preventDefault();
@@ -865,6 +921,16 @@ els.menu.addEventListener('keydown', (event) => {
     return;
   }
   if (event.key === 'Tab') closeMenu();
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+
+  // Tab leaves the menu, so arrow keys are the way to reach the delete item.
+  const items = [els.menuInsert, els.menuOpen, els.menuDelete].filter((item) => !item.hidden);
+  if (items.length === 0) return;
+  event.preventDefault();
+  const step = event.key === 'ArrowDown' ? 1 : -1;
+  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+  const next = index === -1 ? 0 : (index + step + items.length) % items.length;
+  items[next]?.focus({ preventScroll: true });
 });
 
 document.addEventListener(
