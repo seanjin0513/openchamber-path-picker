@@ -48,6 +48,7 @@ const els = {
   menuName: el<HTMLElement>('#menu-name'),
   menuInsert: el<HTMLButtonElement>('#menu-insert'),
   menuOpen: el<HTMLButtonElement>('#menu-open'),
+  menuReveal: el<HTMLButtonElement>('#menu-reveal'),
   menuDelete: el<HTMLButtonElement>('#menu-delete'),
   menuDeleteLabel: el<HTMLElement>('#menu-delete-label'),
 };
@@ -413,7 +414,8 @@ function openMenu(path: string, kind: FileListEntry['kind'], row: HTMLButtonElem
   menuTarget = { path, kind, row };
   els.menuName.textContent = baseName(path);
   els.menuName.title = absolutePath(path);
-  // Folders can only be inserted; files keep the open-with-item. Both can be deleted.
+  // Folders can only be inserted; files keep the open-with-item. Both can be
+  // revealed in the system file manager and deleted.
   els.menuInsert.hidden = kind !== 'directory';
   els.menuOpen.hidden = kind === 'directory';
   armDelete(false);
@@ -429,7 +431,7 @@ function openMenu(path: string, kind: FileListEntry['kind'], row: HTMLButtonElem
   els.menu.style.left = `${left}px`;
   els.menu.style.top = `${top}px`;
 
-  const first = [els.menuInsert, els.menuOpen, els.menuDelete].find((item) => !item.hidden);
+  const first = [els.menuInsert, els.menuOpen, els.menuReveal, els.menuDelete].find((item) => !item.hidden);
   first?.focus({ preventScroll: true });
 }
 
@@ -499,6 +501,28 @@ async function openPathWithDefaultApp(path: string): Promise<void> {
     showStatus(`已用默认应用打开 ${baseName(path)}`, 'success');
   } catch (error) {
     const message = describeServiceError(error, '无法用默认应用打开。');
+    showStatus(message, 'error');
+    void host.toast({ kind: 'error', message }).catch(() => undefined);
+  }
+}
+
+async function revealInFileManager(path: string): Promise<void> {
+  if (!state.directory) return;
+
+  try {
+    const result = await host.serviceRequest({
+      method: 'POST',
+      path: '/reveal',
+      body: JSON.stringify({ path: absolutePath(path) }),
+    });
+
+    if (result.status < 200 || result.status >= 300) {
+      throw new Error(serviceErrorText(result.body) ?? `本地服务返回 ${result.status}。`);
+    }
+
+    showStatus(`已在文件管理器中显示 ${baseName(path)}`, 'success');
+  } catch (error) {
+    const message = describeServiceError(error, '无法在文件管理器中显示。');
     showStatus(message, 'error');
     void host.toast({ kind: 'error', message }).catch(() => undefined);
   }
@@ -903,6 +927,12 @@ els.menuOpen.addEventListener('click', () => {
   if (target) void openPathWithDefaultApp(target.path);
 });
 
+els.menuReveal.addEventListener('click', () => {
+  const target = menuTarget;
+  closeMenu();
+  if (target) void revealInFileManager(target.path);
+});
+
 els.menuDelete.addEventListener('click', () => {
   const target = menuTarget;
   if (!target) return;
@@ -924,7 +954,7 @@ els.menu.addEventListener('keydown', (event) => {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 
   // Tab leaves the menu, so arrow keys are the way to reach the delete item.
-  const items = [els.menuInsert, els.menuOpen, els.menuDelete].filter((item) => !item.hidden);
+  const items = [els.menuInsert, els.menuOpen, els.menuReveal, els.menuDelete].filter((item) => !item.hidden);
   if (items.length === 0) return;
   event.preventDefault();
   const step = event.key === 'ArrowDown' ? 1 : -1;

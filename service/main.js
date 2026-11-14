@@ -172,6 +172,48 @@ async function moveToTrash(target) {
   }
 }
 
+function revealerFor(target) {
+  if (process.platform === 'darwin') {
+    return { command: 'open', args: ['-R', target] };
+  }
+  if (process.platform === 'win32') {
+    return { command: 'explorer.exe', args: [`/select,${target}`] };
+  }
+  // xdg-open has no "select this entry" mode: show the containing folder instead.
+  return { command: 'xdg-open', args: [path.dirname(target)] };
+}
+
+async function revealEntry(target) {
+  if (typeof target !== 'string' || target.length === 0) {
+    throw new ServiceError(400, '缺少路径。');
+  }
+  if (target.includes('\0')) {
+    throw new ServiceError(400, '路径无效。');
+  }
+  if (!path.isAbsolute(target)) {
+    throw new ServiceError(400, '需要绝对路径。');
+  }
+
+  try {
+    await fs.stat(target);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new ServiceError(404, '文件不存在或已被移动。');
+    }
+    throw new ServiceError(500, '无法读取这个文件。');
+  }
+
+  const { command, args } = revealerFor(target);
+  try {
+    await launch(command, args);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new ServiceError(500, `找不到系统命令：${command}`);
+    }
+    throw new ServiceError(500, '系统无法打开文件管理器。');
+  }
+}
+
 async function openFile(target) {
   if (typeof target !== 'string' || target.length === 0) {
     throw new ServiceError(400, '缺少文件路径。');
@@ -234,6 +276,20 @@ const server = http.createServer(async (request, response) => {
       }
 
       await openFile(payload && payload.path);
+      send(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/reveal') {
+      let payload;
+      try {
+        payload = JSON.parse(await readBody(request));
+      } catch (error) {
+        if (error instanceof ServiceError) throw error;
+        throw new ServiceError(400, '请求内容不是有效的 JSON。');
+      }
+
+      await revealEntry(payload && payload.path);
       send(response, 200, { ok: true });
       return;
     }

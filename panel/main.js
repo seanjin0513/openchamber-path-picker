@@ -1787,6 +1787,7 @@ ${GUEST_UI_LOOK_CSS}`;
     menuName: el2("#menu-name"),
     menuInsert: el2("#menu-insert"),
     menuOpen: el2("#menu-open"),
+    menuReveal: el2("#menu-reveal"),
     menuDelete: el2("#menu-delete"),
     menuDeleteLabel: el2("#menu-delete-label")
   };
@@ -2089,7 +2090,7 @@ ${GUEST_UI_LOOK_CSS}`;
     const top = Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin));
     els.menu.style.left = `${left}px`;
     els.menu.style.top = `${top}px`;
-    const first = [els.menuInsert, els.menuOpen, els.menuDelete].find((item) => !item.hidden);
+    const first = [els.menuInsert, els.menuOpen, els.menuReveal, els.menuDelete].find((item) => !item.hidden);
     first?.focus({ preventScroll: true });
   }
   function armDelete(armed) {
@@ -2149,6 +2150,24 @@ ${GUEST_UI_LOOK_CSS}`;
       showStatus(`\u5DF2\u7528\u9ED8\u8BA4\u5E94\u7528\u6253\u5F00 ${baseName(path)}`, "success");
     } catch (error) {
       const message = describeServiceError(error, "\u65E0\u6CD5\u7528\u9ED8\u8BA4\u5E94\u7528\u6253\u5F00\u3002");
+      showStatus(message, "error");
+      void host.toast({ kind: "error", message }).catch(() => void 0);
+    }
+  }
+  async function revealInFileManager(path) {
+    if (!state.directory) return;
+    try {
+      const result = await host.serviceRequest({
+        method: "POST",
+        path: "/reveal",
+        body: JSON.stringify({ path: absolutePath(path) })
+      });
+      if (result.status < 200 || result.status >= 300) {
+        throw new Error(serviceErrorText(result.body) ?? `\u672C\u5730\u670D\u52A1\u8FD4\u56DE ${result.status}\u3002`);
+      }
+      showStatus(`\u5DF2\u5728\u6587\u4EF6\u7BA1\u7406\u5668\u4E2D\u663E\u793A ${baseName(path)}`, "success");
+    } catch (error) {
+      const message = describeServiceError(error, "\u65E0\u6CD5\u5728\u6587\u4EF6\u7BA1\u7406\u5668\u4E2D\u663E\u793A\u3002");
       showStatus(message, "error");
       void host.toast({ kind: "error", message }).catch(() => void 0);
     }
@@ -2489,6 +2508,11 @@ ${GUEST_UI_LOOK_CSS}`;
     closeMenu();
     if (target) void openPathWithDefaultApp(target.path);
   });
+  els.menuReveal.addEventListener("click", () => {
+    const target = menuTarget;
+    closeMenu();
+    if (target) void revealInFileManager(target.path);
+  });
   els.menuDelete.addEventListener("click", () => {
     const target = menuTarget;
     if (!target) return;
@@ -2507,7 +2531,7 @@ ${GUEST_UI_LOOK_CSS}`;
     }
     if (event.key === "Tab") closeMenu();
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const items = [els.menuInsert, els.menuOpen, els.menuDelete].filter((item) => !item.hidden);
+    const items = [els.menuInsert, els.menuOpen, els.menuReveal, els.menuDelete].filter((item) => !item.hidden);
     if (items.length === 0) return;
     event.preventDefault();
     const step = event.key === "ArrowDown" ? 1 : -1;
