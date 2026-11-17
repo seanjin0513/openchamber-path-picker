@@ -25,9 +25,9 @@ OpenChamber 扩展：以树形浏览当前工作区的文件，点一下就把�
 4. 右键文件夹，选择「插入路径」，不需要先点进这个文件夹就能插到它的路径。
 5. 右键文件，选择「用默认应用打开」，用系统关联的应用打开它。
 6. 右键文件或文件夹，选择「在文件管理器中显示」，会在访达（macOS）或资源管理器（Windows）里定位到它；Linux 上打开所在目录。
-7. 右键任意文件或文件夹，选择「删除」（红色），再点一次「确认删除？」才真正删除。macOS 上会移到废纸篓，其他系统直接删除，且只能删项目目录内的内容。
+7. 右键任意文件或文件夹，选择「删除」（红色），再点一次「确认删除？」才真正删除。macOS 上会移到废纸篓，Windows 上移到回收站（网络盘等回收站不可用的情况直接删除），其他系统直接删除，且只能删项目目录内的内容。
 
-相对路径以当前项目根目录为基准，例如 `data/2026-10.xlsx`；绝对路径是项目目录加相对路径，例如 `/Users/me/project/data/2026-10.xlsx`。面板不会自动加 `@`，插入的是纯文本路径。
+相对路径以当前项目根目录为基准，例如 `data/2026-10.xlsx`；绝对路径是项目目录加相对路径，在 macOS 上形如 `/Users/me/project/data/2026-10.xlsx`，在 Windows 上是本机分隔符的写法，例如 `D:\code\project\data\2026-10.xlsx`。面板不会自动加 `@`，插入的是纯文本路径。
 
 键盘：`↑`/`↓` 在文件树中移动，`→` 展开文件夹，`←` 收起文件夹或回到上一级，`Enter` 展开或插入，`/` 聚焦筛选框，`Esc` 清空筛选。
 
@@ -49,6 +49,8 @@ npm run build      # esbuild -> panel/main.js
 npm run typecheck  # tsc --noEmit
 ```
 
+`node_modules` 里的 esbuild 二进制是分平台的（macOS arm64、Windows x64 各不相同）。在两个系统之间同步项目目录时不要同步 `node_modules`，到另一个系统后先删掉它再 `npm install`，否则 `npm run build` 会报找不到 esbuild 的可执行文件。
+
 结构：
 
 ```
@@ -66,6 +68,6 @@ icon.svg           面板图标
 ## 权限
 
 - `files`：用于 `host.listDir` 读取项目目录。面板只调用目录列表接口，不会改写文件。
-- `service` + `exec`：右键打开文件、在文件管理器中显示或删除时，宿主启动 `service/main.js`。打开文件调用系统 `open`（macOS）、`explorer.exe`（Windows）或 `xdg-open`（Linux）；显示用 `open -R`、`explorer.exe /select,`，Linux 上打开所在目录；删除在 macOS 上移入 `~/.Trash`，其他系统用 `fs.rm` 直接删除。服务只监听 `127.0.0.1`，每个请求都校验宿主注入的 Bearer 令牌；删除只接受存在、绝对且位于项目目录内的路径（项目根目录本身不允许删除）；空闲 60 秒后自行退出，下次右键再启动。
+- `service` + `exec`：右键打开文件、在文件管理器中显示或删除时，宿主启动 `service/main.js`。打开文件调用系统 `open`（macOS）、`explorer.exe`（Windows）或 `xdg-open`（Linux）；显示用 `open -R`、`explorer.exe /select,`，Linux 上打开所在目录；删除在 macOS 上移入 `~/.Trash`，在 Windows 上通过一个隐藏的 PowerShell 进程调用 `SHFileOperation`（`FOF_ALLOWUNDO`）移入回收站，回收站不可用时（网络盘、只读文件）退回 `fs.rm` 直接删除，其他系统直接删除。Windows 上还有两点特殊处理：路径先换成反斜杠的本机写法，`/select,` 与路径分成两个参数（否则资源管理器会打开错误的位置）；资源管理器改由 PowerShell 的 `Start-Process -WindowStyle Normal` 启动，因为宿主是隐藏启动服务的，直接 spawn 会让新窗口继承隐藏状态——表现为「提示成功但看不到窗口」，启动后再把该窗口切到前台，实在抢不到前台时闪一下任务栏。服务只监听 `127.0.0.1`，每个请求都校验宿主注入的 Bearer 令牌；删除只接受存在、绝对且位于项目目录内的路径（项目根目录本身不允许删除）；空闲 60 秒后自行退出，下次右键再启动。
 
 没有声明 `prompt`，插入路径走 `host.compose`，不需要发送消息的权限。

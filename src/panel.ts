@@ -110,11 +110,25 @@ function extensionOf(name: string): string {
   return name.slice(index + 1).toUpperCase().slice(0, 5);
 }
 
+// The host hands over Windows project directories with forward slashes
+// (`D:/code/app`), so the drive letter or UNC prefix tells the platforms apart;
+// checking for a backslash would trip on macOS names that contain one.
+const WINDOWS_ROOT = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
+
+/** Where a deleted entry goes on this platform, for the status line. */
+function trashName(): string {
+  return WINDOWS_ROOT.test(state.directory ?? '') ? '回收站' : '废纸篓';
+}
+
 function absolutePath(relative: string): string {
   const root = state.directory ?? '';
-  const separator = root.includes('\\') ? '\\' : '/';
+  const windows = WINDOWS_ROOT.test(root);
+  const separator = windows ? '\\' : '/';
   const trimmed = root.replace(/[\\/]+$/, '');
-  return `${trimmed}${separator}${relative.split('/').join(separator)}`;
+  // Windows shell programs (explorer.exe) reject forward slashes, so a Windows
+  // root is rewritten with native separators before the path is joined.
+  const base = windows ? trimmed.replace(/\//g, '\\') : trimmed;
+  return `${base}${separator}${relative.split('/').join(separator)}`;
 }
 
 function compareEntries(a: FileListEntry, b: FileListEntry): number {
@@ -549,7 +563,7 @@ async function deleteEntry(path: string, row: HTMLButtonElement): Promise<void> 
     state.expanded.delete(path);
     state.errors.delete(path);
 
-    showStatus(`${trashed ? '已移到废纸篓' : '已删除'} ${path}`, 'success');
+    showStatus(`${trashed ? `已移到${trashName()}` : '已删除'} ${path}`, 'success');
     await loadDir(parent);
     if (parent) focusRowByPath(parent);
     else els.list.focus({ preventScroll: true });

@@ -1838,11 +1838,17 @@ ${GUEST_UI_LOOK_CSS}`;
     if (index <= 0 || index === name.length - 1) return "";
     return name.slice(index + 1).toUpperCase().slice(0, 5);
   }
+  var WINDOWS_ROOT = /^(?:[a-zA-Z]:[\\/]|[\\/]{2}[^\\/])/;
+  function trashName() {
+    return WINDOWS_ROOT.test(state.directory ?? "") ? "\u56DE\u6536\u7AD9" : "\u5E9F\u7EB8\u7BD3";
+  }
   function absolutePath(relative) {
     const root = state.directory ?? "";
-    const separator = root.includes("\\") ? "\\" : "/";
+    const windows = WINDOWS_ROOT.test(root);
+    const separator = windows ? "\\" : "/";
     const trimmed = root.replace(/[\\/]+$/, "");
-    return `${trimmed}${separator}${relative.split("/").join(separator)}`;
+    const base = windows ? trimmed.replace(/\//g, "\\") : trimmed;
+    return `${base}${separator}${relative.split("/").join(separator)}`;
   }
   function compareEntries(a, b) {
     const aDirectory = isDirectory(a);
@@ -2189,7 +2195,7 @@ ${GUEST_UI_LOOK_CSS}`;
       state.children.delete(path);
       state.expanded.delete(path);
       state.errors.delete(path);
-      showStatus(`${trashed ? "\u5DF2\u79FB\u5230\u5E9F\u7EB8\u7BD3" : "\u5DF2\u5220\u9664"} ${path}`, "success");
+      showStatus(`${trashed ? `\u5DF2\u79FB\u5230${trashName()}` : "\u5DF2\u5220\u9664"} ${path}`, "success");
       await loadDir(parent);
       if (parent) focusRowByPath(parent);
       else els.list.focus({ preventScroll: true });
